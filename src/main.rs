@@ -1,5 +1,9 @@
+use std::u128;
+
 use flux_rs::*;
+use big_integer::BigInteger;
 
 fn main() {
-    println!("Hello, world!");
+    let num = BigInteger::new(u128::MAX);
+    println!("{:#?}", num.data.get_data());
 }
