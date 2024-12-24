@@ -1,3 +1,5 @@
+use std::ops::{Add, BitAnd, BitOr, BitXor};
+
 use flux_rs::*;
 
 pub struct BigInteger {
@@ -17,17 +19,35 @@ impl BigInteger {
     }
 
     pub fn new_from_string(literal: &str) -> BigInteger {
-        unimplemented!()
+        unimplemented!();
+
+        // for symb in literal.chars() {
+
+        // }
     }
 }
+
+// impl Add for BigInteger {
+//     type Output = BigInteger;
+
+//     // fn add(self, rhs: Self) -> Self::Output {
+//     //     let xor = self.data ^ rhs.data;
+//     //     let and = self.data & rhs.data;
+//     //     for bit in and.get_data() {
+
+//     //     }
+//     // }
+// }
 
 #[opaque]
 #[refined_by(len: int)]
 #[invariant(0 <= len)]
 pub struct BitVector {
-    pub data: Vec<u8>,
+    data: Vec<u8>,
     length: usize
 }
+
+type bit_op = fn(&bool, &bool) -> bool;
 
 impl BitVector {
     #[trusted]
@@ -65,12 +85,57 @@ impl BitVector {
     #[trusted]
     #[sig(fn(&BitVector[@len]) -> Vec<bool>)]
     pub fn get_data(&self) -> Vec<bool> {
-        let mut data = Vec::with_capacity(self.length);
-        for index in 0..self.length {
+        let mut data = Vec::with_capacity(self.get_length());
+        for index in 0..self.get_length() {
             let byte_index = index / 8;
             let bit_index = index % 8;
             data.push(self.data[byte_index] & (1 << bit_index) != 0);
         }
         data
+    }
+
+    #[trusted]
+    #[sig(fn(&BitVector[@len]) -> usize[len])]
+    pub fn get_length(&self) -> usize {
+        self.length
+    }
+
+    #[sig(fn(&BitVector[@m], &BitVector[@n], bit_op) -> BitVector)]
+    fn bit_op(&self, rhs: &Self, func: bit_op) -> BitVector {
+        let length = self.get_length().max(rhs.get_length());
+        let self_data = self.get_data();
+        let rhs_data = rhs.get_data();
+        let mut new_data = Vec::with_capacity(length);
+        for index in 0..length {
+            new_data.push(func(
+                self_data.get(index).unwrap_or_else(|| &false), 
+                rhs_data.get(index).unwrap_or_else(|| &false)
+            ));
+        }
+        BitVector::new_from_bools(&new_data.as_slice())
+    }
+}
+
+impl BitXor for BitVector {
+    type Output = BitVector;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        self.bit_op(&rhs, |b1, b2| b1 ^ b2)
+    }
+}
+
+impl BitOr for BitVector {
+    type Output = BitVector;
+    
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self.bit_op(&rhs, |b1, b2| b1 | b2)
+    }    
+}
+
+impl BitAnd for BitVector {
+    type Output = BitVector;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        self.bit_op(&rhs, |b1, b2| b1 & b2)
     }
 }
