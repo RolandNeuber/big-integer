@@ -2,11 +2,13 @@ use std::ops::{Add, BitAnd, BitOr, BitXor};
 
 use flux_rs::*;
 
+#[derive(Debug)]
 pub struct BigInteger {
     pub data: BitVector
 }
 
 impl BigInteger {
+    #[sig(fn(u128) -> BigInteger)]
     pub fn new(number: u128) -> BigInteger {
         let mut data = Vec::with_capacity(128);
         for bit in 0..128 {
@@ -18,40 +20,57 @@ impl BigInteger {
         }
     }
 
-    pub fn new_from_string(literal: &str) -> BigInteger {
-        unimplemented!();
+    // pub fn new_from_string(literal: &str) -> BigInteger {
+    //     // unimplemented!();
 
-        // for symb in literal.chars() {
+    //     for symb in literal.chars() {
+    //         let digit: u8 = symb.try_into();
 
-        // }
-    }
+    //     }
+    // }
 }
 
-// impl Add for BigInteger {
-//     type Output = BigInteger;
+impl Add for BigInteger {
+    type Output = BigInteger;
 
-//     // fn add(self, rhs: Self) -> Self::Output {
-//     //     let xor = self.data ^ rhs.data;
-//     //     let and = self.data & rhs.data;
-//     //     for bit in and.get_data() {
+    #[sig(fn(Self, Self) -> Self::Output)]
+    fn add(self, rhs: Self) -> Self::Output {
+        let xor = self.data.clone() ^ rhs.data.clone();
+        let and = self.data & rhs.data;
+        let mut res = BitVector::new();
+        
+        let mut carry = *and.get_data().get(0).unwrap_or_else(|| &false);
+        res.push(xor.get_bit(0));
 
-//     //     }
-//     // }
-// }
+        for index in 0..and.get_length().max(xor.get_length()) {
+            let digit_sum = 
+                *xor.get_data().get(index + 1).unwrap_or_else(|| &false) as u8 +
+                *and.get_data().get(index).unwrap_or_else(|| &false) as u8 + 
+                carry as u8;
+
+            res.push(digit_sum % 2 == 1);
+
+            carry = digit_sum >= 2
+        }
+
+        BigInteger{ data: res }
+    }
+}
 
 #[opaque]
 #[refined_by(len: int)]
 #[invariant(0 <= len)]
+#[derive(Clone, Debug)]
 pub struct BitVector {
     data: Vec<u8>,
     length: usize
 }
 
-type bit_op = fn(&bool, &bool) -> bool;
+type BitOp = fn(&bool, &bool) -> bool;
 
 impl BitVector {
     #[trusted]
-    #[sig(fn() -> BitVector[0])]
+    #[sig(fn() -> Self[0])]
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
@@ -60,7 +79,7 @@ impl BitVector {
     }
 
     #[trusted]
-    #[sig(fn(&[bool][@len]) -> BitVector[(len + 7) / 8])]
+    #[sig(fn(&[bool][@len]) -> Self[(len + 7) / 8])]
     pub fn new_from_bools(data: &[bool]) -> Self {
         let length = data.len().div_ceil(8);
         let mut data_u8: Vec<u8> = Vec::with_capacity(length);
@@ -83,7 +102,21 @@ impl BitVector {
     }
 
     #[trusted]
-    #[sig(fn(&BitVector[@len]) -> Vec<bool>)]
+    #[sig(fn(self: &strg Self[@len], bool) ensures self: Self[len + 8])]
+    pub fn push(&mut self, value: bool) {
+        if self.get_length() % 8 != 0 {
+            let bit_index = self.get_length() % 8;
+            let byte = self.get_data_raw_mut().last_mut().expect("Vector length should not be zero.");
+            *byte |= (value as u8) << bit_index;
+        }
+        else {
+            self.get_data_raw_mut().push(value as u8);
+        }
+        *self.get_length_mut() += 1;
+    }
+
+    #[trusted]
+    #[sig(fn(&Self) -> Vec<bool>)]
     pub fn get_data(&self) -> Vec<bool> {
         let mut data = Vec::with_capacity(self.get_length());
         for index in 0..self.get_length() {
@@ -95,13 +128,53 @@ impl BitVector {
     }
 
     #[trusted]
-    #[sig(fn(&BitVector[@len]) -> usize[len])]
+    #[sig(fn(&Self) -> &Vec<u8>)]
+    fn get_data_raw(&self) -> &Vec<u8> {
+        &self.data
+    }
+
+    #[trusted]
+    #[sig(fn(&mut Self) -> &mut Vec<u8>)]
+    fn get_data_raw_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.data
+    }
+ 
+    #[sig(fn(&Self, usize) -> bool)]
+    pub fn get_bit(&self, index: usize) -> bool {
+        let byte_index = index / 8;
+        let bit_index = index % 8;
+        let value = 1 << bit_index;
+        self.get_data_raw()[byte_index] & value != 0
+    }
+
+    #[trusted]
+    #[sig(fn(&mut Self[@len], usize{index: index < len}, bool))]
+    pub fn set_bit(&mut self, index: usize, value: bool) {
+        let byte_index = index / 8;
+        let bit_index = index % 8;
+        let value = (value as u8) << bit_index;
+        if self.get_data_raw()[byte_index] & value != 0 {
+            self.get_data_raw_mut()[byte_index] &= value;
+        }
+        else {
+            self.get_data_raw_mut()[byte_index] |= value;
+        }
+    }
+
+    #[trusted]
+    #[sig(fn(&Self[@len]) -> usize[len])]
     pub fn get_length(&self) -> usize {
         self.length
     }
 
-    #[sig(fn(&BitVector[@m], &BitVector[@n], bit_op) -> BitVector)]
-    fn bit_op(&self, rhs: &Self, func: bit_op) -> BitVector {
+    #[trusted]
+    #[sig(fn(&mut Self[@len]) -> &mut usize[len])]
+    fn get_length_mut(&mut self) -> &mut usize {
+        &mut self.length
+    }
+
+    #[sig(fn(&Self[@m], &Self[@n], BitOp) -> BitVector)]
+    fn bit_op(&self, rhs: &Self, func: BitOp) -> BitVector {
         let length = self.get_length().max(rhs.get_length());
         let self_data = self.get_data();
         let rhs_data = rhs.get_data();
@@ -119,6 +192,7 @@ impl BitVector {
 impl BitXor for BitVector {
     type Output = BitVector;
 
+    #[sig(fn(Self, Self) -> Self::Output)]
     fn bitxor(self, rhs: Self) -> Self::Output {
         self.bit_op(&rhs, |b1, b2| b1 ^ b2)
     }
@@ -126,7 +200,8 @@ impl BitXor for BitVector {
 
 impl BitOr for BitVector {
     type Output = BitVector;
-    
+   
+    #[sig(fn(Self, Self) -> Self::Output)] 
     fn bitor(self, rhs: Self) -> Self::Output {
         self.bit_op(&rhs, |b1, b2| b1 | b2)
     }    
@@ -135,6 +210,7 @@ impl BitOr for BitVector {
 impl BitAnd for BitVector {
     type Output = BitVector;
 
+    #[sig(fn(Self, Self) -> Self::Output)]
     fn bitand(self, rhs: Self) -> Self::Output {
         self.bit_op(&rhs, |b1, b2| b1 & b2)
     }

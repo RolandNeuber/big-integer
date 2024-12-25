@@ -1,11 +1,9 @@
-use std::u128;
-
-use flux_rs::*;
 use big_integer::BigInteger;
 
 fn main() {
-    let num = BigInteger::new(10);
-    let num2 = BigInteger::new(6);
+    let num = BigInteger::new(123);
+    let num2 = BigInteger::new(255);
+    let num3 = num + num2;
 
-    println!("{:#?}", (num.data ^ num2.data).get_data());
+    println!("{:#?}", num3.data);
 }
