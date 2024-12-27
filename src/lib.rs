@@ -35,14 +35,16 @@ impl BigInteger {
 impl Add for BigInteger {
     type Output = BigInteger;
 
-    // TODO: Fix off by 2 error on carrying
     #[sig(fn(Self, Self) -> Self::Output)]
     fn add(self, rhs: Self) -> Self::Output {
         let xor = self.data.clone() ^ rhs.data.clone();
         let and = self.data & rhs.data;
         let mut res = BitVector::new();
         
-        let mut carry = *and.get_data().get(0).unwrap_or_else(|| &false);
+        let mut carry = false;
+        if xor.get_length() == 0 {
+            return BigInteger::new(0);
+        }
         res.push(xor.get_bit(0));
 
         for index in 0..and.get_length().max(xor.get_length()) {
@@ -102,7 +104,7 @@ impl BitVector {
     /// BitVector::new_from_bools(&[true, true, false, true]);
     /// ```
     #[trusted]
-    #[sig(fn(&[bool][@len]) -> Self[(len + 7) / 8])]
+    #[sig(fn(&[bool][@len]) -> Self[len])]
     pub fn new_from_bools(data: &[bool]) -> Self {
         let length = data.len().div_ceil(8);
         let mut data_u8: Vec<u8> = Vec::with_capacity(length);
@@ -141,7 +143,7 @@ impl BitVector {
     /// assert_eq!(vec1, vec2);
     /// ```
     #[trusted]
-    #[sig(fn(self: &strg Self[@len], bool) ensures self: Self[len + 8])]
+    #[sig(fn(self: &strg Self[@len], bool) ensures self: Self[len + 1])]
     pub fn push(&mut self, value: bool) {
         if self.get_length() % 8 != 0 {
             let bit_index = self.get_length() % 8;
@@ -166,14 +168,13 @@ impl BitVector {
     /// 
     /// assert_eq!(data, vec![true, false, true]);
     /// ```
-    #[trusted]
     #[sig(fn(&Self) -> Vec<bool>)]
     pub fn get_data(&self) -> Vec<bool> {
         let mut data = Vec::with_capacity(self.get_length());
         for index in 0..self.get_length() {
             let byte_index = index / 8;
             let bit_index = index % 8;
-            data.push(self.data[byte_index] & (1 << bit_index) != 0);
+            data.push(self.get_data_raw()[byte_index] & (1 << bit_index) != 0);
         }
         data
     }
@@ -187,7 +188,7 @@ impl BitVector {
 
     /// Gets a mutable reference to the raw byte data that encodes the bits.
     #[trusted]
-    #[sig(fn(&mut Self) -> &mut Vec<u8>)]
+    #[sig(fn(self: &strg Self[@len]) -> &mut Vec<u8> ensures self: Self[len])]
     fn get_data_raw_mut(&mut self) -> &mut Vec<u8> {
         &mut self.data
     }
@@ -226,7 +227,6 @@ impl BitVector {
     /// 
     /// assert_eq!(vec.get_data(), &[true, true, true]);
     /// ```
-    #[trusted]
     #[sig(fn(&mut Self[@len], usize{index: index < len}, bool))]
     pub fn set_bit(&mut self, index: usize, value: bool) {
         let byte_index = index / 8;
@@ -278,7 +278,8 @@ impl BitVector {
     /// Returns the result as an owned bit vector.
     /// Should be used as template to implement binary operators.
     /// Should not be used standalone.
-    #[sig(fn(&Self[@m], &Self[@n], BitOp) -> BitVector)]
+    #[trusted]
+    #[sig(fn(&Self[@m], &Self[@n], BitOp) -> BitVector[if m >= n {m} else {n}])]
     fn bit_op(&self, rhs: &Self, func: BitOp) -> BitVector {
         let length = self.get_length().max(rhs.get_length());
         let self_data = self.get_data();
@@ -297,8 +298,8 @@ impl BitVector {
 impl BitXor for BitVector {
     type Output = BitVector;
 
-    #[sig(fn(Self, Self) -> Self::Output)]
-    fn bitxor(self, rhs: Self) -> Self::Output {
+    #[sig(fn(Self[@m], Self[@n]) -> Self[if m >= n {m} else {n}])]
+    fn bitxor(self, rhs: Self) -> Self {
         self.bit_op(&rhs, |b1, b2| b1 ^ b2)
     }
 }
@@ -306,8 +307,8 @@ impl BitXor for BitVector {
 impl BitOr for BitVector {
     type Output = BitVector;
    
-    #[sig(fn(Self, Self) -> Self::Output)] 
-    fn bitor(self, rhs: Self) -> Self::Output {
+    #[sig(fn(Self[@m], Self[@n]) -> Self[if m >= n {m} else {n}])]
+    fn bitor(self, rhs: Self) -> Self {
         self.bit_op(&rhs, |b1, b2| b1 | b2)
     }    
 }
@@ -315,14 +316,15 @@ impl BitOr for BitVector {
 impl BitAnd for BitVector {
     type Output = BitVector;
 
-    #[sig(fn(Self, Self) -> Self::Output)]
-    fn bitand(self, rhs: Self) -> Self::Output {
+    #[sig(fn(Self[@m], Self[@n]) -> Self[if m >= n {m} else {n}])]
+    fn bitand(self, rhs: Self) -> Self {
         self.bit_op(&rhs, |b1, b2| b1 & b2)
     }
 }
 
 impl PartialEq for BitVector {
+    #[sig(fn(&Self[@m], &Self[@n]) -> bool)] 
     fn eq(&self, other: &Self) -> bool {
-        self.get_data() == other.get_data()
+        self.get_length() == other.get_length() && self.get_data() == other.get_data()
     }
 }
