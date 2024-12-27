@@ -2,12 +2,14 @@ use std::{fmt::Display, ops::{Add, BitAnd, BitOr, BitXor}};
 
 use flux_rs::*;
 
+/// A struct that defines a natural number of *pratically* arbitrary size.
 #[derive(Debug)]
 pub struct BigInteger {
     pub data: BitVector
 }
 
 impl BigInteger {
+    /// Creates a big integer instance from a u128.
     #[sig(fn(u128) -> BigInteger)]
     pub fn new(number: u128) -> BigInteger {
         let mut data = Vec::with_capacity(128);
@@ -58,6 +60,7 @@ impl Add for BigInteger {
     }
 }
 
+/// A struct that defines a vector of bits more efficiently encoded than a Vec of bool.
 #[opaque]
 #[refined_by(len: int)]
 #[invariant(0 <= len)]
@@ -67,11 +70,14 @@ pub struct BitVector {
     length: usize
 }
 
+/// Defines a boolean binary operation.
 type BitOp = fn(&bool, &bool) -> bool;
 
 impl BitVector {
     /// Creates a new empty bit vector.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -87,7 +93,9 @@ impl BitVector {
     }
 
     /// Creates a bit vector from a slice of boolean values.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -117,7 +125,9 @@ impl BitVector {
     }
 
     /// Pushes a boolean value to the end of the bit vector.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -145,7 +155,9 @@ impl BitVector {
     }
 
     /// Gets the data of the bit vector as a vector of boolean values.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -181,7 +193,9 @@ impl BitVector {
     }
 
     /// Gets the value of an individual bit of the bit vector a the specified index.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -201,7 +215,9 @@ impl BitVector {
     }
 
     /// Sets the value of an individual bit of the bit vector a the specified index. 
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -225,7 +241,9 @@ impl BitVector {
     }
 
     /// Returns the length of the bit vector as an owned usize.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
@@ -240,7 +258,9 @@ impl BitVector {
     }
 
     /// Returns the length of the bit vector as a mutable reference.
+    /// 
     /// # Examples
+    /// 
     /// ```
     /// use big_integer::BitVector;
     /// 
