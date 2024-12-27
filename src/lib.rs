@@ -1,4 +1,4 @@
-use std::ops::{Add, BitAnd, BitOr, BitXor};
+use std::{fmt::Display, ops::{Add, BitAnd, BitOr, BitXor}};
 
 use flux_rs::*;
 
@@ -33,6 +33,7 @@ impl BigInteger {
 impl Add for BigInteger {
     type Output = BigInteger;
 
+    // TODO: Fix off by 2 error on carrying
     #[sig(fn(Self, Self) -> Self::Output)]
     fn add(self, rhs: Self) -> Self::Output {
         let xor = self.data.clone() ^ rhs.data.clone();
@@ -69,6 +70,13 @@ pub struct BitVector {
 type BitOp = fn(&bool, &bool) -> bool;
 
 impl BitVector {
+    /// Creates a new empty bit vector.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// BitVector::new();
+    /// ```
     #[trusted]
     #[sig(fn() -> Self[0])]
     pub fn new() -> Self {
@@ -78,6 +86,13 @@ impl BitVector {
         }
     }
 
+    /// Creates a bit vector from a slice of boolean values.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// BitVector::new_from_bools(&[true, true, false, true]);
+    /// ```
     #[trusted]
     #[sig(fn(&[bool][@len]) -> Self[(len + 7) / 8])]
     pub fn new_from_bools(data: &[bool]) -> Self {
@@ -101,6 +116,20 @@ impl BitVector {
         }
     }
 
+    /// Pushes a boolean value to the end of the bit vector.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// let vec1 = BitVector::new_from_bools(&[true, false, true]);
+    /// let mut vec2 = BitVector::new();
+    /// 
+    /// vec2.push(true);
+    /// vec2.push(false);
+    /// vec2.push(true);
+    /// 
+    /// assert_eq!(vec1, vec2);
+    /// ```
     #[trusted]
     #[sig(fn(self: &strg Self[@len], bool) ensures self: Self[len + 8])]
     pub fn push(&mut self, value: bool) {
@@ -115,6 +144,16 @@ impl BitVector {
         *self.get_length_mut() += 1;
     }
 
+    /// Gets the data of the bit vector as a vector of boolean values.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// let vec = BitVector::new_from_bools(&[true, false, true]);
+    /// let data = vec.get_data();
+    /// 
+    /// assert_eq!(data, vec![true, false, true]);
+    /// ```
     #[trusted]
     #[sig(fn(&Self) -> Vec<bool>)]
     pub fn get_data(&self) -> Vec<bool> {
@@ -127,19 +166,33 @@ impl BitVector {
         data
     }
 
+    /// Gets an immutable reference to the raw byte data that encodes the bits.
     #[trusted]
     #[sig(fn(&Self) -> &Vec<u8>)]
     fn get_data_raw(&self) -> &Vec<u8> {
         &self.data
     }
 
+    /// Gets a mutable reference to the raw byte data that encodes the bits.
     #[trusted]
     #[sig(fn(&mut Self) -> &mut Vec<u8>)]
     fn get_data_raw_mut(&mut self) -> &mut Vec<u8> {
         &mut self.data
     }
- 
-    #[sig(fn(&Self, usize) -> bool)]
+
+    /// Gets the value of an individual bit of the bit vector a the specified index.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// let vec = BitVector::new_from_bools(&[true, false, true]);
+    /// let bit1 = vec.get_bit(1);
+    /// let bit2 = vec.get_bit(2);
+    /// 
+    /// assert_eq!(bit1, false);
+    /// assert_eq!(bit2, true);
+    /// ```
+    #[sig(fn(&Self[@len], usize{index: index < len}) -> bool)]
     pub fn get_bit(&self, index: usize) -> bool {
         let byte_index = index / 8;
         let bit_index = index % 8;
@@ -147,6 +200,16 @@ impl BitVector {
         self.get_data_raw()[byte_index] & value != 0
     }
 
+    /// Sets the value of an individual bit of the bit vector a the specified index. 
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// let mut vec = BitVector::new_from_bools(&[true, false, true]);
+    /// vec.set_bit(1, true);
+    /// 
+    /// assert_eq!(vec.get_data(), &[true, true, true]);
+    /// ```
     #[trusted]
     #[sig(fn(&mut Self[@len], usize{index: index < len}, bool))]
     pub fn set_bit(&mut self, index: usize, value: bool) {
@@ -161,18 +224,40 @@ impl BitVector {
         }
     }
 
+    /// Returns the length of the bit vector as an owned usize.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// let vec = BitVector::new_from_bools(&[true, false, true]);
+    /// 
+    /// assert_eq!(vec.get_length(), 3);
+    /// ```
     #[trusted]
     #[sig(fn(&Self[@len]) -> usize[len])]
     pub fn get_length(&self) -> usize {
         self.length
     }
 
+    /// Returns the length of the bit vector as a mutable reference.
+    /// # Examples
+    /// ```
+    /// use big_integer::BitVector;
+    /// 
+    /// let vec = BitVector::new_from_bools(&[true, false, true]);
+    /// 
+    /// assert_eq!(vec.get_length(), 3);
+    /// ```
     #[trusted]
     #[sig(fn(&mut Self[@len]) -> &mut usize[len])]
     fn get_length_mut(&mut self) -> &mut usize {
         &mut self.length
     }
 
+    /// Executes a bitwise generic binary operation on two bit vectors.
+    /// Returns the result as an owned bit vector.
+    /// Should be used as template to implement binary operators.
+    /// Should not be used standalone.
     #[sig(fn(&Self[@m], &Self[@n], BitOp) -> BitVector)]
     fn bit_op(&self, rhs: &Self, func: BitOp) -> BitVector {
         let length = self.get_length().max(rhs.get_length());
@@ -213,5 +298,11 @@ impl BitAnd for BitVector {
     #[sig(fn(Self, Self) -> Self::Output)]
     fn bitand(self, rhs: Self) -> Self::Output {
         self.bit_op(&rhs, |b1, b2| b1 & b2)
+    }
+}
+
+impl PartialEq for BitVector {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_data() == other.get_data()
     }
 }
